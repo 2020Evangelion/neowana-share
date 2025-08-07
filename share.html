@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Neowana 공유</title>
+  <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+</head>
+<body>
+  <h1>🎧 Neowana 공유 페이지</h1>
+  <input type="file" id="fileInput" />
+  <p id="status"></p>
+  <p>공유 URL: <a id="magnetLink" href="#" target="_blank"></a></p>
+
+  <script>
+    const client = new WebTorrent();
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+    const magnetLink = document.getElementById('magnetLink');
+
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      client.seed(file, torrent => {
+        const link = torrent.magnetURI;
+        status.textContent = '파일 공유 중...';
+        magnetLink.href = link;
+        magnetLink.textContent = link;
+      });
+    });
+  </script>
+</body>
+</html>
