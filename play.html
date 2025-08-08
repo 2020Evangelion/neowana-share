@@ -13,7 +13,7 @@
 </head>
 <body>
   <h2>🎧 Neowana 재생</h2>
-  <p class="hint">이 페이지는 마그넷 링크로 스트리밍 재생을 시도합니다.</p>
+  <p class="hint">이 페이지는 마그넷 링크로 스트리밍 재생을 시도합니다.<br/>시딩 중인 기기의 브라우저 탭이 꺼지면 재생이 중단됩니다.</p>
   <p id="status">초기화 중…</p>
   <div id="player"></div>
   <div id="log"></div>
@@ -32,14 +32,14 @@
     } else {
       const client = new WebTorrent();
       const trackers = [
-        // WebRTC (wss) 트래커들
         'wss://tracker.openwebtorrent.com',
         'wss://tracker.btorrent.xyz',
         'wss://tracker.webtorrent.dev',
-        'wss://tracker.files.fm:7073/announce',
-        'wss://spacetradersapi-chatbox.uno:443/announce',
+        'wss://tracker.fastcast.nz',
+        'wss://tracker.files.fm:7073/announce'
       ];
 
+      // magnet에 동일 트래커를 덧붙여 최대로 연결 시도
       const href = magnet + trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
       log('토렌트 메타데이터 가져오는 중… (트래커 연결 시도)');
 
@@ -48,16 +48,16 @@
       client.add(href, torrent => {
         log('토렌트 추가 완료. infoHash =', torrent.infoHash);
 
-        // 디버깅: 피어 수 / 다운로드 진행률 표시
+        // 진행상태/피어 수 로그
         const iv = setInterval(() => {
-          log(`피어: ${torrent.numPeers} / 내려받은: ${(torrent.downloaded/1024/1024).toFixed(2)}MB / 속도: ${(torrent.downloadSpeed/1024).toFixed(0)}KB/s`);
+          log(`피어: ${torrent.numPeers}  받은: ${(torrent.downloaded/1024/1024).toFixed(2)}MB  속도: ${(torrent.downloadSpeed/1024).toFixed(0)}KB/s`);
         }, 1000);
 
-        torrent.on('wire', () => log('피어 연결됨. 현재 피어:', torrent.numPeers));
+        torrent.on('wire', () => log('피어 연결됨 → 현재 피어:', torrent.numPeers));
         torrent.on('noPeers', a => log('피어 없음 유형:', a || 'unknown'));
         torrent.on('error', e => log('TORRENT ERROR:', e.message));
 
-        // 오디오 파일 선택
+        // 오디오 파일 탐색
         const file = torrent.files.find(f => /\.(mp3|wav|m4a|aac|ogg)$/i.test(f.name)) || torrent.files[0];
         if (!file) {
           clearInterval(iv);
@@ -65,8 +65,8 @@
           return;
         }
 
-        log('스트리밍 시작:', file.name);
-        file.appendTo(player, { autoplay: true, controls: true }, err => {
+        log('스트리밍 시작:', file.name, ' (오토플레이가 막히면 플레이 버튼을 눌러주세요)');
+        file.appendTo(player, { autoplay: true, controls: true }, (err) => {
           if (err) log('플레이어 초기화 실패:', err.message);
         });
       });
