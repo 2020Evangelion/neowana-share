@@ -62,7 +62,6 @@
       log('파일 준비: ' + file.name);
       client.seed(file, { announce: trackers }, torrent => {
         log('Seeding 시작. 피어를 기다리는 중…');
-        // 명시적으로 트래커를 넣은 마그넷 링크 구성
         const href = 'magnet:?xt=urn:btih:' + torrent.infoHash +
           '&dn=' + encodeURIComponent(file.name) +
           trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
