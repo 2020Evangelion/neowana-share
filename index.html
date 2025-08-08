@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neowana 공유</title>
+  <script src="https://cdn.jsdelivr.net/npm/webtorrent@2/dist/webtorrent.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 28px; margin-bottom: 12px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+    #status { margin-top: 12px; color: #374151; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button, input[type="file"] { font-size: 16px; }
+    #magnetWrap { margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; word-break: break-all; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>🎧 Neowana – WebTorrent 공유</h1>
+
+  <div class="card">
+    <p>오디오 파일을 선택하면 <b>P2P 공유</b>가 시작됩니다. 이 페이지를 열어둔 동안만 공유가 유지돼요.</p>
+    <div class="row" style="margin-top:8px;">
+      <input id="fileInput" type="file" accept="audio/*" />
+      <button id="copyBtn" style="display:none;">🔗 링크 복사</button>
+    </div>
+
+    <div id="magnetWrap" style="display:none;">
+      <p>마그넷 링크:</p>
+      <a id="magnetLink" href="#" target="_blank"></a>
+    </div>
+
+    <ol id="status"></ol>
+  </div>
+
+  <script>
+    const client = new WebTorrent();
+    const trackers = [
+      'wss://tracker.openwebtorrent.com',
+      'wss://tracker.webtorrent.dev',
+      'wss://tracker.fastcast.nz'
+    ];
+
+    const fileInput = document.getElementById('fileInput');
+    const statusEl  = document.getElementById('status');
+    const magnetWrap = document.getElementById('magnetWrap');
+    const magnetLink = document.getElementById('magnetLink');
+    const copyBtn = document.getElementById('copyBtn');
+
+    function log(msg) {
+      const li = document.createElement('li');
+      li.textContent = msg;
+      statusEl.appendChild(li);
+    }
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      log('파일 준비: ' + file.name);
+      client.seed(file, { announce: trackers }, torrent => {
+        log('Seeding 시작. 피어를 기다리는 중…');
+        // 명시적으로 트래커를 넣은 마그넷 링크 구성
+        const href = 'magnet:?xt=urn:btih:' + torrent.infoHash +
+          '&dn=' + encodeURIComponent(file.name) +
+          trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
+
+        magnetLink.textContent = href;
+        magnetLink.href = href;
+        magnetWrap.style.display = 'block';
+        copyBtn.style.display = 'inline-block';
+        log('⚠️ 이 탭을 닫으면 공유가 중단됩니다.');
+      });
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(magnetLink.href);
+        copyBtn.textContent = '복사됨!';
+        setTimeout(() => (copyBtn.textContent = '🔗 링크 복사'), 1200);
+      } catch (e) {
+        alert('복사 실패: ' + e.message);
+      }
+    });
+  </script>
+</body>
+</html>
