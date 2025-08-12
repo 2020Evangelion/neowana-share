@@ -5,91 +5,77 @@
   <title>Neowana 공유</title>
   <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
-    .hint{color:#666;font-size:14px}
-    #log{font-size:13px;white-space:pre-wrap;color:#111;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:12px}
-    #magnetWrap{display:none;margin-top:8px}
-    input[type=file]{margin-top:8px}
-    button{margin-left:8px}
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin: 24px }
+    .hint { color:#666; font-size: 14px }
+    #log { font-size: 13px; white-space: pre-wrap; color:#111; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:12px; margin-top:12px }
+    #pick { margin-top: 12px; padding:10px 14px; border-radius:8px; background:#2563eb; color:#fff; border:0; }
+    #magnetWrap { display:none; margin-top: 12px }
+    a { word-break: break-all }
   </style>
 </head>
 <body>
   <h2>🎧 Neowana 공유</h2>
-  <p class="hint">파일을 선택하면 브라우저가 WebRTC로 시딩을 시작합니다. 이 탭을 닫으면 공유가 중단됩니다.</p>
+  <p class="hint">파일을 선택하면 브라우저에서 시딩을 시작하고, 마그넷 링크를 만들어 앱으로 보내줍니다.</p>
 
-  <input type="file" id="fileInput" />
-  <p id="status">대기 중…</p>
+  <input id="fileInput" type="file" accept="audio/*" style="display:none" />
+  <button id="pick">파일 선택</button>
 
   <div id="magnetWrap">
-    <p>공유 URL(마그넷): <a id="magnetLink" href="#" target="_blank"></a>
-      <button id="copyBtn">복사</button>
-    </p>
+    <p>마그넷: <a id="magnetLink" href="#" target="_blank"></a></p>
   </div>
 
   <div id="log"></div>
 
   <script>
     const client = new WebTorrent();
-    const fileInput = document.getElementById('fileInput');
-    const statusEl  = document.getElementById('status');
-    const magnetWrap= document.getElementById('magnetWrap');
-    const magnetLink= document.getElementById('magnetLink');
-    const copyBtn   = document.getElementById('copyBtn');
-    const logEl     = document.getElementById('log');
+    const input = document.getElementById('fileInput');
+    const pick  = document.getElementById('pick');
+    const linkA = document.getElementById('magnetLink');
+    const wrap  = document.getElementById('magnetWrap');
+    const logEl = document.getElementById('log');
 
-    function log(...a){ statusEl.textContent = a.join(' '); logEl.textContent += a.join(' ') + '\n'; }
+    function log(...args){ logEl.textContent += args.join(' ') + '\n'; }
 
-    // RN(WebView)에서 "파일 선택 열어줘" 메시지 받으면 input 클릭
-    window.addEventListener('message', (e)=>{
-      try{
-        const data = JSON.parse(e.data);
-        if (data?.type === 'OPEN_FILE_PICKER') {
-          fileInput.click();
-        }
-      }catch {}
+    // RN WebView 쪽에서 "파일 선택" 요청 받을 수도 있음 (옵션)
+    window.addEventListener('message', e => {
+      try {
+        const data = JSON.parse(e.data || '{}');
+        if (data.type === 'OPEN_FILE_PICKER') input.click();
+      } catch {}
     });
 
-    const trackers = [
-      'wss://tracker.openwebtorrent.com',
-      'wss://tracker.btorrent.xyz',
-      'wss://tracker.webtorrent.dev',
-      'wss://tracker.fastcast.nz',
-      'wss://tracker.files.fm:7073/announce'
-    ];
+    pick.addEventListener('click', () => input.click());
 
-    client.on('error', err => log('CLIENT ERROR:', err.message));
-
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0];
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
       if (!file) return;
 
-      log('시딩 준비…', file.name);
+      log('시딩 시작:', file.name);
+      const trackers = [
+        'wss://tracker.openwebtorrent.com',
+        'wss://tracker.btorrent.xyz',
+        'wss://tracker.webtorrent.dev',
+        'wss://tracker.files.fm:7073/announce'
+      ];
+
       client.seed(file, { announce: trackers }, torrent => {
-        log('시딩 시작. infoHash =', torrent.infoHash, '피어 대기중…');
+        const href = 'magnet:?xt=urn:btih:' + torrent.infoHash
+          + '&dn=' + encodeURIComponent(file.name)
+          + trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
 
-        // 트래커 붙인 마그넷 직접 생성 (환경에 따라 magnetURI가 wss 트래커를 안 달고 나오는 경우 있음)
-        const href = 'magnet:?xt=urn:btih:' + torrent.infoHash +
-          '&dn=' + encodeURIComponent(file.name) +
-          trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
+        log('마그넷 생성:', href);
+        wrap.style.display = 'block';
+        linkA.href = href;
+        linkA.textContent = href;
 
-        magnetLink.textContent = href;
-        magnetLink.href = href;
-        magnetWrap.style.display = 'block';
-
-        // RN(WebView)로도 전달
-        if (window.ReactNativeWebView?.postMessage) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type:'MAGNET', href }));
+        // ★ RN(WebView)로 마그넷 전송
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAGNET', href, name: file.name }));
+          log('앱으로 마그넷 전달 완료 (postMessage).');
+        } else {
+          log('RN WebView 감지 안됨: 브라우저에서 테스트 중일 가능성.');
         }
       });
-    });
-
-    copyBtn.addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(magnetLink.textContent || '');
-        log('마그넷 링크를 클립보드에 복사했습니다.');
-      }catch{
-        log('복사 실패. 링크를 수동으로 길게 눌러 복사하세요.');
-      }
     });
   </script>
 </body>
