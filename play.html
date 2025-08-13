@@ -5,17 +5,29 @@
   <title>Neowana 재생</title>
   <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
-    .hint{color:#666;font-size:14px}
-    #log{font-size:13px;white-space:pre-wrap;color:#111;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:12px}
-    audio{width:100%;margin-top:12px}
+    :root { --pad: 16px; }
+    body{
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      margin: 20px; color:#111;
+    }
+    .hint{ color:#666; font-size:14px; margin:4px 0 10px; }
+    #status{ font-size:14px; margin:8px 0; }
+    #player { position: sticky; top: 0; z-index: 2; background: #fff; padding-bottom: 8px; }
+    audio { width: 100%; outline: none; }
+    #log{
+      font-size:13px; white-space:pre-wrap; color:#111;
+      background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px;
+      padding:12px; margin-top:8px;
+      max-height: 280px; overflow: auto;  /* 로그 상자 높이 제한 */
+    }
   </style>
 </head>
 <body>
   <h2>🎧 Neowana 재생</h2>
   <p class="hint">이 페이지는 마그넷 링크로 스트리밍 재생을 시도합니다.<br/>시딩 중인 기기의 브라우저 탭이 꺼지면 재생이 중단됩니다.</p>
-  <p id="status">초기화 중…</p>
+
   <div id="player"></div>
+  <p id="status">초기화 중…</p>
   <div id="log"></div>
 
   <script>
@@ -23,9 +35,14 @@
     const magnet = qs.get('magnet');
     const statusEl = document.getElementById('status');
     const player = document.getElementById('player');
-    const logEl = document.getElementById('log');
+    const logEl   = document.getElementById('log');
 
-    function log(...args){ statusEl.textContent = args.join(' '); logEl.textContent += args.join(' ') + '\n'; }
+    function log(...args){
+      const line = args.join(' ');
+      statusEl.textContent = line;
+      logEl.textContent += line + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
 
     if (!magnet) {
       log('마그넷 파라미터가 없습니다.');
@@ -35,11 +52,9 @@
         'wss://tracker.openwebtorrent.com',
         'wss://tracker.btorrent.xyz',
         'wss://tracker.webtorrent.dev',
-        'wss://tracker.fastcast.nz',
-        'wss://tracker.files.fm:7073/announce'
+        'wss://tracker.files.fm:7073/announce',
+        'wss://spacetradersapi-chatbox.uno:443/announce',
       ];
-
-      // magnet에 동일 트래커를 덧붙여 최대로 연결 시도
       const href = magnet + trackers.map(t => '&tr=' + encodeURIComponent(t)).join('');
       log('토렌트 메타데이터 가져오는 중… (트래커 연결 시도)');
 
@@ -48,25 +63,18 @@
       client.add(href, torrent => {
         log('토렌트 추가 완료. infoHash =', torrent.infoHash);
 
-        // 진행상태/피어 수 로그
         const iv = setInterval(() => {
-          log(`피어: ${torrent.numPeers}  받은: ${(torrent.downloaded/1024/1024).toFixed(2)}MB  속도: ${(torrent.downloadSpeed/1024).toFixed(0)}KB/s`);
+          log(`피어: ${torrent.numPeers} | 받은: ${(torrent.downloaded/1024/1024).toFixed(2)}MB | 속도: ${(torrent.downloadSpeed/1024).toFixed(0)}KB/s`);
         }, 1000);
-
-        torrent.on('wire', () => log('피어 연결됨 → 현재 피어:', torrent.numPeers));
+        torrent.on('wire', () => log('피어 연결됨. 현재 피어:', torrent.numPeers));
         torrent.on('noPeers', a => log('피어 없음 유형:', a || 'unknown'));
         torrent.on('error', e => log('TORRENT ERROR:', e.message));
 
-        // 오디오 파일 탐색
         const file = torrent.files.find(f => /\.(mp3|wav|m4a|aac|ogg)$/i.test(f.name)) || torrent.files[0];
-        if (!file) {
-          clearInterval(iv);
-          log('오디오 파일을 찾지 못했습니다.');
-          return;
-        }
+        if (!file) { clearInterval(iv); log('오디오 파일을 찾지 못했습니다.'); return; }
 
-        log('스트리밍 시작:', file.name, ' (오토플레이가 막히면 플레이 버튼을 눌러주세요)');
-        file.appendTo(player, { autoplay: true, controls: true }, (err) => {
+        log('스트리밍 시작:', file.name);
+        file.appendTo(player, { autoplay: true, controls: true }, err => {
           if (err) log('플레이어 초기화 실패:', err.message);
         });
       });
